@@ -53,17 +53,17 @@ class WtfDB(yaboli.Database):
 			db.execute("UPDATE acronyms SET deleted = 1 WHERE acronym_id = ?", (acronym_id,))
 
 class Wtf:
+	SHORT_DESCRIPTION = "A database of explanations for words, acronyms and initialisms"
 	DESCRIPTION = (
-		"'wtf' is a database of acronyms and initialisms."
+		"'wtf' is a database of explanations for words, acronyms and initialisms."
 		" It is inspired by the linux wtf program and uses its acronyms,"
-		" in addition to user generated ones.\n"
+		" in addition to ones set by users.\n"
 	)
 	COMMANDS = (
-		"!wtf is <acronym> - look up an acronym\n"
-		"!wtf add <acronym> <explanation> - add a new acronym\n"
-		"!wtf detail <acronym> - shows more info about the acronym\n"
-		"!wtf delete <id> - delete acronym with corresponding id"
-		" (Look up the id using !wtf detail)\n"
+		"!wtf is <term> - look up a term\n"
+		"!wtf add <term> <explanation> - add a new explanation\n"
+		"!wtf detail <term> - shows more info about the term's explanations\n"
+		"!wtf delete <id> - delete explanation with corresponding id (look up the id using !wtf detail)\n"
 	)
 	CREDITS = "Created by @Garmy using github.com/Garmelon/yaboli\n"
 
@@ -97,8 +97,8 @@ class Wtf:
 			acronym = match_add.group(1)
 			explanation = match_add.group(2).strip()
 			await self.db.add(acronym, explanation, message.sender.nick)
-			await room.send(f"Added acronym: {acronym} - {explanation}", message.mid)
-			logger.INFO(f"{mention(message.sender.nick)} added acronym: {acronym} - {explanation}")
+			await room.send(f"Added explanation: {acronym} - {explanation}", message.mid)
+			logger.INFO(f"{mention(message.sender.nick)} added explanation: {acronym} - {explanation}")
 
 		elif match_detail:
 			acronym = match_detail.group(1)
@@ -115,14 +115,14 @@ class Wtf:
 			aid = match_delete.group(1)
 			await self.db.delete(aid)
 			await room.send(f"Deleted.", message.mid)
-			logger.INFO(f"{mention(message.sender.nick)} deleted acronym with id {aid}")
+			logger.INFO(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
 
 		else:
 			text = "Usage:\n" + self.COMMANDS
 			await room.send(text, message.mid)
 
 class WtfBot(yaboli.Bot):
-	SHORT_HELP = "An acronym database"
+	SHORT_HELP = Wtf.SHORT_DESCRIPTION
 	LONG_HELP = Wtf.DESCRIPTION + Wtf.COMMANDS + Wtf.CREDITS
 
 	def __init__(self, nick, wtfdbfile, cookiefile=None):
