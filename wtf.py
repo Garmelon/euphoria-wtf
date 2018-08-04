@@ -87,7 +87,7 @@ class Wtf:
 			explanations = await self.db.find(acronym)
 			if explanations:
 				# Acronym, Explanation
-				lines = [f"{a} - {e}" for a, e in explanations]
+				lines = [f"{a} — {e}" for a, e in explanations]
 				text = "\n".join(lines)
 				await room.send(text, message.mid)
 			else:
@@ -97,7 +97,7 @@ class Wtf:
 			acronym = match_add.group(1)
 			explanation = match_add.group(2).strip()
 			await self.db.add(acronym, explanation, message.sender.nick)
-			await room.send(f"Added explanation: {acronym} - {explanation}", message.mid)
+			await room.send(f"Added explanation: {acronym} — {explanation}", message.mid)
 			logger.INFO(f"{mention(message.sender.nick)} added explanation: {acronym} - {explanation}")
 
 		elif match_detail:
@@ -105,7 +105,7 @@ class Wtf:
 			explanations = await self.db.find_full(acronym)
 			if explanations:
 				# Id, Acronym, Explanation, aUthor
-				lines = [f"{i}: {a} - {e} (by {mention(u, ping=False)})" for i, a, e, u in explanations]
+				lines = [f"{i}: {a} — {e} (by {mention(u, ping=False)})" for i, a, e, u in explanations]
 				text = "\n".join(lines)
 				await room.send(text, message.mid)
 			else:
