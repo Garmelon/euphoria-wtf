@@ -30,7 +30,7 @@ class WtfDB(yaboli.Database):
 				"INSERT INTO acronyms (acronym, explanation, author) "
 				"VALUES (?,?,?)"
 			), (acronym, explanation, author))
-	
+
 	@yaboli.operation
 	def find(self, db, acronym):
 		c = db.execute((
@@ -72,9 +72,11 @@ class Wtf:
 	RE_DETAIL = r"\s*detail\s+(\S+)\s*"
 	RE_DELETE = r"\s*delete\s+(\d+)\s*"
 
+	TRIGGER_WTF_IS = r"\s*wtf\s+is\s+(\S+)\s*"
+
 	def __init__(self, dbfile):
 		self.db = WtfDB(dbfile)
-	
+
 	@yaboli.command("wtf")
 	async def command_wtf(self, room, message, argstr):
 		match_is     = re.fullmatch(self.RE_IS,     argstr)
@@ -83,33 +85,29 @@ class Wtf:
 		match_delete = re.fullmatch(self.RE_DELETE, argstr)
 
 		if match_is:
-			acronym = match_is.group(1)
-			explanations = await self.db.find(acronym)
+			term = match_is.group(1)
+			explanations = await self.db.find(term)
 			if explanations:
-				# Acronym, Explanation
-				lines = [f"{a} — {e}" for a, e in explanations]
-				text = "\n".join(lines)
+				text = self._format_explanations(explanations)
 				await room.send(text, message.mid)
 			else:
-				await room.send(f"{acronym!r} not found.", message.mid)
+				await room.send(f"{term!r} not found.", message.mid)
 
 		elif match_add:
-			acronym = match_add.group(1)
+			term = match_add.group(1)
 			explanation = match_add.group(2).strip()
-			await self.db.add(acronym, explanation, message.sender.nick)
-			await room.send(f"Added explanation: {acronym} — {explanation}", message.mid)
-			logger.INFO(f"{mention(message.sender.nick)} added explanation: {acronym} - {explanation}")
+			await self.db.add(term, explanation, message.sender.nick)
+			await room.send(f"Added explanation: {term} — {explanation}", message.mid)
+			logger.INFO(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
 
 		elif match_detail:
-			acronym = match_detail.group(1)
-			explanations = await self.db.find_full(acronym)
+			term = match_detail.group(1)
+			explanations = await self.db.find_full(term)
 			if explanations:
-				# Id, Acronym, Explanation, aUthor
-				lines = [f"{i}: {a} — {e} (by {mention(u, ping=False)})" for i, a, e, u in explanations]
-				text = "\n".join(lines)
+				text = self._format_explanations_detailed(explanations)
 				await room.send(text, message.mid)
 			else:
-				await room.send(f"{acronym!r} not found.", message.mid)
+				await room.send(f"{term!r} not found.", message.mid)
 
 		elif match_delete:
 			aid = match_delete.group(1)
@@ -121,6 +119,28 @@ class Wtf:
 			text = "Usage:\n" + self.COMMANDS
 			await room.send(text, message.mid)
 
+	@yaboli.trigger(TRIGGER_WTF_IS, flags=re.IGNORECASE)
+	async def trigger_wtf_is(self, room, message, match):
+		term = match.group(1)
+		explanations = await self.db.find(term)
+		if explanations:
+			text = self._format_explanations(explanations)
+			await room.send(text, message.mid)
+		else:
+			await room.send(f"{term!r} not found.", message.mid)
+
+	@staticmethod
+	def _format_explanations(explanations):
+		# Term, Explanation
+		lines = [f"{t} — {e}\n" for t, e in explanations]
+		return "".join(lines)
+
+	@staticmethod
+	def _format_explanations_detailed(explanations):
+		# Id, Term, Explanation, Author
+		lines = [f"{i}: {t} — {e} (by {mention(a, ping=False)})\n" for i, t, e, a in explanations]
+		return "".join(lines)
+
 class WtfBot(yaboli.Bot):
 	SHORT_HELP = Wtf.SHORT_DESCRIPTION
 	LONG_HELP = Wtf.DESCRIPTION + Wtf.COMMANDS + Wtf.CREDITS
@@ -128,6 +148,11 @@ class WtfBot(yaboli.Bot):
 	def __init__(self, nick, wtfdbfile, cookiefile=None):
 		super().__init__(nick, cookiefile=cookiefile)
 		self.wtf = Wtf(wtfdbfile)
+
+	async def on_send(self, room, message):
+		await super().on_send(room, message)
+
+		await self.wtf.trigger_wtf_is(room, message)
 
 	async def on_command_specific(self, room, message, command, nick, argstr):
 		if similar(nick, room.session.nick) and not argstr:
