@@ -35,7 +35,8 @@ class WtfDB(yaboli.Database):
 	def find(self, db, acronym):
 		c = db.execute((
 			"SELECT acronym, explanation FROM acronyms "
-			"WHERE NOT deleted AND p_lower(acronym) = ?"
+			"WHERE NOT deleted AND p_lower(acronym) = ? "
+			"ORDER BY acronym_id ASC"
 		), (acronym.lower(),))
 		return c.fetchall()
 
@@ -43,7 +44,8 @@ class WtfDB(yaboli.Database):
 	def find_full(self, db, acronym):
 		c = db.execute((
 			"SELECT acronym_id, acronym, explanation, author FROM acronyms "
-			"WHERE NOT deleted AND p_lower(acronym) = ?"
+			"WHERE NOT deleted AND p_lower(acronym) = ? "
+			"ORDER BY acronym_id ASC"
 		), (acronym.lower(),))
 		return c.fetchall()
 
