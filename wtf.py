@@ -55,7 +55,7 @@ class WtfDB(yaboli.Database):
 			db.execute("UPDATE acronyms SET deleted = 1 WHERE acronym_id = ?", (acronym_id,))
 
 class Wtf:
-	SHORT_DESCRIPTION = "A database of explanations for words, acronyms and initialisms"
+	SHORT_DESCRIPTION = "a database of explanations for words, acronyms and initialisms"
 	DESCRIPTION = (
 		"'wtf' is a database of explanations for words, acronyms and initialisms."
 		" It is inspired by the linux wtf program and uses its acronyms,"
@@ -67,7 +67,7 @@ class Wtf:
 		"!wtf detail <term> - shows more info about the term's explanations\n"
 		"!wtf delete <id> - delete explanation with corresponding id (look up the id using !wtf detail)\n"
 	)
-	CREDITS = "Created by @Garmy using github.com/Garmelon/yaboli\n"
+	AUTHOR = "Created by @Garmy using github.com/Garmelon/yaboli\n"
 
 	RE_IS     = r"\s*is\s+(\S+)\s*"
 	RE_ADD    = r"\s*add\s+(\S+)\s+(.*)"
@@ -145,7 +145,7 @@ class Wtf:
 
 class WtfBot(yaboli.Bot):
 	SHORT_HELP = Wtf.SHORT_DESCRIPTION
-	LONG_HELP = Wtf.DESCRIPTION + Wtf.COMMANDS + Wtf.CREDITS
+	LONG_HELP = Wtf.DESCRIPTION + Wtf.COMMANDS + Wtf.AUTHOR
 
 	def __init__(self, nick, wtfdbfile, cookiefile=None):
 		super().__init__(nick, cookiefile=cookiefile)
