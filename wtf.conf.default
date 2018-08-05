@@ -1,0 +1,10 @@
+[general]
+nick = wtf
+cookiefile = wtf.cookie
+wtfdbfile = wtf.db
+
+[rooms]
+# Format:
+# room
+# room=password
+test
