@@ -100,7 +100,7 @@ class Wtf:
 			explanation = match_add.group(2).strip()
 			await self.db.add(term, explanation, message.sender.nick)
 			await room.send(f"Added explanation: {term} — {explanation}", message.mid)
-			logger.INFO(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
+			logger.info(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
 
 		elif match_detail:
 			term = match_detail.group(1)
@@ -115,7 +115,7 @@ class Wtf:
 			aid = match_delete.group(1)
 			await self.db.delete(aid)
 			await room.send(f"Deleted.", message.mid)
-			logger.INFO(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
+			logger.info(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
 
 		else:
 			text = "Usage:\n" + self.COMMANDS
