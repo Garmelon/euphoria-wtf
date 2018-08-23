@@ -50,6 +50,16 @@ class WtfDB(yaboli.Database):
 		return c.fetchall()
 
 	@yaboli.operation
+	def get(self, db, acronym_id):
+		with db:
+			c = db.execute((
+				"SELECT acronym FROM acronyms "
+				"WHERE NOT deleted AND acronym_id=?"
+			), (acronym_id,))
+			res = c.fetchone()
+			return None if res is None else res[0]
+
+	@yaboli.operation
 	def delete(self, db, acronym_id):
 		with db:
 			db.execute("UPDATE acronyms SET deleted = 1 WHERE acronym_id = ?", (acronym_id,))
@@ -66,13 +76,15 @@ class Wtf:
 		"!wtf add <term> <explanation> - add a new explanation\n"
 		"!wtf detail <term> - shows more info about the term's explanations\n"
 		"!wtf delete <id> - delete explanation with corresponding id (look up the id using !wtf detail)\n"
+		"!wtf replace <id> <explanation> - a shortcut for deleting and re-adding with a different explanation\n"
 	)
 	AUTHOR = "Created by @Garmy using github.com/Garmelon/yaboli\n"
 
-	RE_IS     = r"\s*is\s+(\S+)\s*"
-	RE_ADD    = r"\s*add\s+(\S+)\s+(.*)"
-	RE_DETAIL = r"\s*detail\s+(\S+)\s*"
-	RE_DELETE = r"\s*delete\s+(\d+)\s*"
+	RE_IS      = r"\s*is\s+(\S+)\s*"
+	RE_ADD     = r"\s*add\s+(\S+)\s+(.+)"
+	RE_DETAIL  = r"\s*detail\s+(\S+)\s*"
+	RE_DELETE  = r"\s*delete\s+(\d+)\s*"
+	RE_REPLACE = r"\s*replace\s+(\d+)\s+(.+)"
 
 	TRIGGER_WTF_IS = r"\s*wtf\s+is\s+(\S+)\s*"
 
@@ -81,10 +93,11 @@ class Wtf:
 
 	@yaboli.command("wtf")
 	async def command_wtf(self, room, message, argstr):
-		match_is     = re.fullmatch(self.RE_IS,     argstr)
-		match_add    = re.fullmatch(self.RE_ADD,    argstr)
-		match_detail = re.fullmatch(self.RE_DETAIL, argstr)
-		match_delete = re.fullmatch(self.RE_DELETE, argstr)
+		match_is      = re.fullmatch(self.RE_IS,      argstr)
+		match_add     = re.fullmatch(self.RE_ADD,     argstr)
+		match_detail  = re.fullmatch(self.RE_DETAIL,  argstr)
+		match_delete  = re.fullmatch(self.RE_DELETE,  argstr)
+		match_replace = re.fullmatch(self.RE_REPLACE, argstr)
 
 		if match_is:
 			term = match_is.group(1)
@@ -99,8 +112,8 @@ class Wtf:
 			term = match_add.group(1)
 			explanation = match_add.group(2).strip()
 			await self.db.add(term, explanation, message.sender.nick)
-			await room.send(f"Added explanation: {term} — {explanation}", message.mid)
 			logger.info(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
+			await room.send(f"Added explanation: {term} — {explanation}", message.mid)
 
 		elif match_detail:
 			term = match_detail.group(1)
@@ -116,6 +129,20 @@ class Wtf:
 			await self.db.delete(aid)
 			await room.send(f"Deleted.", message.mid)
 			logger.info(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
+
+		elif match_replace:
+			aid = match_replace.group(1)
+			explanation = match_replace.group(2).strip()
+			term = await self.db.get(aid)
+			print(term)
+			if term is None:
+				await room.send("No explanation with that od {aid} exists.")
+			else:
+				await self.db.delete(aid)
+				logger.info(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
+				await self.db.add(term, explanation, message.sender.nick)
+				logger.info(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
+				await room.send(f"Changed explanation: {term} — {explanation}", message.mid)
 
 		else:
 			text = "Usage:\n" + self.COMMANDS
