@@ -136,7 +136,7 @@ class Wtf:
 			term = await self.db.get(aid)
 			print(term)
 			if term is None:
-				await room.send("No explanation with that od {aid} exists.")
+				await room.send(f"No explanation with id {aid} exists.", message.mid)
 			else:
 				await self.db.delete(aid)
 				logger.info(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
