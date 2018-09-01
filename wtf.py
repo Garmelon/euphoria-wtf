@@ -80,13 +80,13 @@ class Wtf:
 	)
 	AUTHOR = "Created by @Garmy using github.com/Garmelon/yaboli\n"
 
-	RE_IS      = r"\s*is\s+(\S+)\s*"
+	RE_IS      = r"\s*is\s+(.*)"
 	RE_ADD     = r"\s*add\s+(\S+)\s+(.+)"
-	RE_DETAIL  = r"\s*detail\s+(\S+)\s*"
+	RE_DETAIL  = r"\s*detail\s+(.*)"
 	RE_DELETE  = r"\s*delete\s+(\d+)\s*"
 	RE_REPLACE = r"\s*replace\s+(\d+)\s+(.+)"
 
-	TRIGGER_WTF_IS = r"\s*wtf\s+is\s+(\S+)\s*"
+	TRIGGER_WTF_IS = r"\s*wtf\s+is\s+(.*)"
 
 	def __init__(self, dbfile):
 		self.db = WtfDB(dbfile)
@@ -100,13 +100,13 @@ class Wtf:
 		match_replace = re.fullmatch(self.RE_REPLACE, argstr)
 
 		if match_is:
-			term = match_is.group(1)
-			explanations = await self.db.find(term)
-			if explanations:
-				text = self._format_explanations(explanations)
-				await room.send(text, message.mid)
-			else:
-				await room.send(f"{term!r} not found.", message.mid)
+			terms = match_is.group(1)
+			terms = [term for term in terms.split() if term]
+			if not terms:
+				return
+
+			lines = await self._find_explanations(terms)
+			await room.send("\n".join(lines), message.mid)
 
 		elif match_add:
 			term = match_add.group(1)
@@ -116,13 +116,13 @@ class Wtf:
 			await room.send(f"Added explanation: {term} — {explanation}", message.mid)
 
 		elif match_detail:
-			term = match_detail.group(1)
-			explanations = await self.db.find_full(term)
-			if explanations:
-				text = self._format_explanations_detailed(explanations)
-				await room.send(text, message.mid)
-			else:
-				await room.send(f"{term!r} not found.", message.mid)
+			terms = match_detail.group(1)
+			terms = [term for term in terms.split() if term]
+			if not terms:
+				return
+
+			lines = await self._find_explanations(terms, detail=True)
+			await room.send("\n".join(lines), message.mid)
 
 		elif match_delete:
 			aid = match_delete.group(1)
@@ -150,25 +150,31 @@ class Wtf:
 
 	@yaboli.trigger(TRIGGER_WTF_IS, flags=re.IGNORECASE)
 	async def trigger_wtf_is(self, room, message, match):
-		term = match.group(1)
-		explanations = await self.db.find(term)
-		if explanations:
-			text = self._format_explanations(explanations)
-			await room.send(text, message.mid)
-		else:
-			await room.send(f"{term!r} not found.", message.mid)
+		terms = match.group(1)
+		terms = [term for term in terms.split() if term]
+		if not terms:
+			return
+
+		lines = await self._find_explanations(terms)
+		await room.send("\n".join(lines), message.mid)
 
 	@staticmethod
-	def _format_explanations(explanations):
-		# Term, Explanation
-		lines = [f"{t} — {e}\n" for t, e in explanations]
-		return "".join(lines)
-
-	@staticmethod
-	def _format_explanations_detailed(explanations):
+	def _format_explanations(explanations, detail=False):
 		# Id, Term, Explanation, Author
-		lines = [f"{i}: {t} — {e} (by {mention(a, ping=False)})\n" for i, t, e, a in explanations]
-		return "".join(lines)
+		if detail:
+			return [f"{i}: {t} — {e} (by {mention(a, ping=False)})" for i, t, e, a in explanations]
+		else:
+			return [     f"{t} — {e}"                               for _, t, e, _ in explanations]
+
+	async def _find_explanations(self, terms, detail=False):
+		lines = []
+		for term in terms:
+			explanations = await self.db.find_full(term)
+			if explanations:
+				lines.extend(self._format_explanations(explanations, detail=detail))
+			else:
+				lines.append(f"{term!r} not found.")
+		return lines
 
 class WtfBot(yaboli.Bot):
 	SHORT_HELP = Wtf.SHORT_DESCRIPTION
