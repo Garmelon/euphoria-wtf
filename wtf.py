@@ -212,7 +212,7 @@ def main(configfile):
 
 	nick = config.get("general", "nick")
 	cookiefile = config.get("general", "cookiefile", fallback=None)
-	wtfdbfile = config.get("general", "wtfdbfile", fallback=None)
+	wtfdbfile = config.get("general", "wtfdbfile")
 	bot = WtfBot(nick, wtfdbfile, cookiefile=cookiefile)
 
 	for room, password in config.items("rooms"):
