@@ -64,8 +64,7 @@ class WtfDB(yaboli.Database):
 		with db:
 			db.execute("UPDATE acronyms SET deleted = 1 WHERE acronym_id = ?", (acronym_id,))
 
-class Wtf:
-	SHORT_DESCRIPTION = "a database of explanations for words, acronyms and initialisms"
+class Wtf(yaboli.Module):
 	DESCRIPTION = (
 		"'wtf' is a database of explanations for words, acronyms and initialisms."
 		" It is inspired by the linux wtf program and uses its acronyms,"
@@ -80,6 +79,12 @@ class Wtf:
 	)
 	AUTHOR = "Created by @Garmy using github.com/Garmelon/yaboli\n"
 
+	SHORT_DESCRIPTION = "a database of explanations for words, acronyms and initialisms"
+	SHORT_HELP = SHORT_DESCRIPTION
+
+	LONG_DESCRIPTION = DESCRIPTION + COMMANDS
+	LONG_HELP        = DESCRIPTION + COMMANDS + AUTHOR
+
 	RE_IS      = r"\s*is\s+(.*)"
 	RE_ADD     = r"\s*add\s+(\S+)\s+(.+)"
 	RE_DETAIL  = r"\s*detail\s+(.*)"
@@ -90,6 +95,12 @@ class Wtf:
 
 	def __init__(self, dbfile):
 		self.db = WtfDB(dbfile)
+
+	async def on_send(self, room, message):
+		await self.trigger_wtf_is(room, message)
+
+	async def on_command_general(self, room, message, command, argstr):
+		await self.command_wtf(room, message, command, argstr)
 
 	@yaboli.command("wtf")
 	async def command_wtf(self, room, message, argstr):
@@ -176,34 +187,6 @@ class Wtf:
 				lines.append(f"{term!r} not found.")
 		return lines
 
-class WtfBot(yaboli.Bot):
-	SHORT_HELP = Wtf.SHORT_DESCRIPTION
-	LONG_HELP = Wtf.DESCRIPTION + Wtf.COMMANDS + Wtf.AUTHOR
-
-	def __init__(self, nick, wtfdbfile, cookiefile=None):
-		super().__init__(nick, cookiefile=cookiefile)
-		self.wtf = Wtf(wtfdbfile)
-
-	async def on_send(self, room, message):
-		await super().on_send(room, message)
-
-		await self.wtf.trigger_wtf_is(room, message)
-
-	async def on_command_specific(self, room, message, command, nick, argstr):
-		if similar(nick, room.session.nick) and not argstr:
-			await self.botrulez_ping(room, message, command)
-			await self.botrulez_help(room, message, command, text=self.LONG_HELP)
-			await self.botrulez_uptime(room, message, command)
-			await self.botrulez_kill(room, message, command)
-			await self.botrulez_restart(room, message, command)
-
-	async def on_command_general(self, room, message, command, argstr):
-		if not argstr:
-			await self.botrulez_ping(room, message, command)
-			await self.botrulez_help(room, message, command, text=self.SHORT_HELP)
-
-		await self.wtf.command_wtf(room, message, command, argstr)
-
 def main(configfile):
 	logging.basicConfig(level=logging.INFO)
 
@@ -213,7 +196,9 @@ def main(configfile):
 	nick = config.get("general", "nick")
 	cookiefile = config.get("general", "cookiefile", fallback=None)
 	wtfdbfile = config.get("general", "wtfdbfile")
-	bot = WtfBot(nick, wtfdbfile, cookiefile=cookiefile)
+	module = Wtf(wtfdbfile)
+
+	bot = yaboli.ModuleBot(module, nick, cookiefile=cookiefile)
 
 	for room, password in config.items("rooms"):
 		if not password:
