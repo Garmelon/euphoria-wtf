@@ -3,7 +3,11 @@ import logging
 import re
 
 import yaboli
-from wtfdb import WtfDB
+
+if __name__ == "__main__":
+    from wtfdb import WtfDB
+else:
+    from .wtfdb import WtfDB
 
 logger = logging.getLogger(__name__)
 
