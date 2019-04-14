@@ -1,211 +1,142 @@
 import asyncio
-import configparser
 import logging
 import re
 
 import yaboli
-from yaboli.utils import *
+from wtfdb import WtfDB
 
-
-logger = logging.getLogger("wtf")
-
-class WtfDB(yaboli.Database):
-	def initialize(self, db):
-		with db:
-			db.execute((
-				"CREATE TABLE IF NOT EXISTS acronyms ("
-					"acronym_id INTEGER PRIMARY KEY, "
-					"acronym TEXT NOT NULL, "
-					"explanation TEXT NOT NULL, "
-					"author TEXT NOT NULL, "
-					"deleted BOOLEAN NOT NULL DEFAULT 0"
-				")"
-			))
-			db.create_function("p_lower", 1, str.lower)
-
-	@yaboli.operation
-	def add(self, db, acronym, explanation, author):
-		with db:
-			db.execute((
-				"INSERT INTO acronyms (acronym, explanation, author) "
-				"VALUES (?,?,?)"
-			), (acronym, explanation, author))
-
-	@yaboli.operation
-	def find(self, db, acronym):
-		c = db.execute((
-			"SELECT acronym, explanation FROM acronyms "
-			"WHERE NOT deleted AND p_lower(acronym) = ? "
-			"ORDER BY acronym_id ASC"
-		), (acronym.lower(),))
-		return c.fetchall()
-
-	@yaboli.operation
-	def find_full(self, db, acronym):
-		c = db.execute((
-			"SELECT acronym_id, acronym, explanation, author FROM acronyms "
-			"WHERE NOT deleted AND p_lower(acronym) = ? "
-			"ORDER BY acronym_id ASC"
-		), (acronym.lower(),))
-		return c.fetchall()
-
-	@yaboli.operation
-	def get(self, db, acronym_id):
-		with db:
-			c = db.execute((
-				"SELECT acronym FROM acronyms "
-				"WHERE NOT deleted AND acronym_id=?"
-			), (acronym_id,))
-			res = c.fetchone()
-			return None if res is None else res[0]
-
-	@yaboli.operation
-	def delete(self, db, acronym_id):
-		with db:
-			db.execute("UPDATE acronyms SET deleted = 1 WHERE acronym_id = ?", (acronym_id,))
+logger = logging.getLogger(__name__)
 
 class Wtf(yaboli.Module):
-	DESCRIPTION = (
-		"'wtf' is a database of explanations for words, acronyms and initialisms."
-		" It is inspired by the linux wtf program and uses its acronyms,"
-		" in addition to ones set by users.\n"
-	)
-	COMMANDS = (
-		"!wtf is <term> - look up a term\n"
-		"!wtf add <term> <explanation> - add a new explanation\n"
-		"!wtf detail <term> - shows more info about the term's explanations\n"
-		"!wtf delete <id> - delete explanation with corresponding id (look up the id using !wtf detail)\n"
-		"!wtf replace <id> <explanation> - a shortcut for deleting and re-adding with a different explanation\n"
-	)
-	AUTHOR = "Created by @Garmy using github.com/Garmelon/yaboli\n"
+    DESCRIPTION = ("a database of explanations for words, acronyms and"
+            " initialisms")
+    HELP_GENERAL = DESCRIPTION
+    HELP_SPECIFIC = [
+            "'wtf' is a database of explanations for words, acronyms and"
+            " initialisms. It is inspired by the linux wtf program and uses"
+            " its acronyms, in addition to ones set by users.",
+            "",
+            "!wtf is <term> - look up a term (also responds to 'wtf is')",
+            "!wtf add <term> <explanation> - add a new explanation",
+            "!wtf detail <term> - shows more info about the term's explanations",
+            "!wtf delete <id> - delete explanation with corresponding id (look"
+            " up the id using !wtf detail)",
+            "!wtf replace <id> <explanation> - a shortcut for deleting and"
+            " re-adding with a different explanation",
+            "",
+            "Uses most acronyms of arch's community/wtf package.",
+            "Made by @Garmy using https://github.com/Garmelon/yaboli.",
+    ]
 
-	SHORT_DESCRIPTION = "a database of explanations for words, acronyms and initialisms"
-	SHORT_HELP = SHORT_DESCRIPTION
+    SECTION = "wtf"
 
-	LONG_DESCRIPTION = DESCRIPTION + COMMANDS
-	LONG_HELP        = DESCRIPTION + COMMANDS + AUTHOR
+    RE_IS      = re.compile(r"\s*is\s+(.*)")
+    RE_ADD     = re.compile(r"\s*add\s+(\S+)\s+(.+)")
+    RE_DETAIL  = re.compile(r"\s*detail\s+(.*)")
+    RE_DELETE  = re.compile(r"\s*delete\s+(\d+)\s*")
+    RE_REPLACE = re.compile(r"\s*replace\s+(\d+)\s+(.+)")
 
-	RE_IS      = r"\s*is\s+(.*)"
-	RE_ADD     = r"\s*add\s+(\S+)\s+(.+)"
-	RE_DETAIL  = r"\s*detail\s+(.*)"
-	RE_DELETE  = r"\s*delete\s+(\d+)\s*"
-	RE_REPLACE = r"\s*replace\s+(\d+)\s+(.+)"
+    RE_WTF_IS = re.compile(r"\s*wtf\s+is\s+(.*)")
 
-	TRIGGER_WTF_IS = r"\s*wtf\s+is\s+(.*)"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-	def __init__(self, dbfile):
-		self.db = WtfDB(dbfile)
+        dbfile = self.config[self.SECTION]["db"]
+        self.db = WtfDB(dbfile)
 
-	async def on_send(self, room, message):
-		await self.trigger_wtf_is(room, message)
+        if self.standalone:
+            self.register_botrulez(kill=True, restart=True)
 
-	async def on_command_general(self, room, message, command, argstr):
-		await self.command_wtf(room, message, command, argstr)
+        self.register_general("wtf", self.cmd_wtf)
 
-	@yaboli.command("wtf")
-	async def command_wtf(self, room, message, argstr):
-		match_is      = re.fullmatch(self.RE_IS,      argstr)
-		match_add     = re.fullmatch(self.RE_ADD,     argstr)
-		match_detail  = re.fullmatch(self.RE_DETAIL,  argstr)
-		match_delete  = re.fullmatch(self.RE_DELETE,  argstr)
-		match_replace = re.fullmatch(self.RE_REPLACE, argstr)
+    @staticmethod
+    def _format_explanations(explanations, detail=False):
+        # Id, Term, Explanation, Author
+        if detail:
+            return [f"{i}: {t} — {e} (by {a})" for i, t, e, a in explanations]
+        else:
+            return [f"{t} — {e}" for _, t, e, _ in explanations]
 
-		if match_is:
-			terms = match_is.group(1)
-			terms = [term for term in terms.split() if term]
-			if not terms:
-				return
+    async def _find_explanations(self, terms, detail=False):
+        lines = []
+        for term in terms:
+            explanations = await self.db.find_full(term)
+            if explanations:
+                lines.extend(self._format_explanations(explanations, detail=detail))
+            else:
+                lines.append(f"{term!r} not found.")
+        return lines
 
-			lines = await self._find_explanations(terms)
-			await room.send("\n".join(lines), message.mid)
+    async def on_send(self, room, message):
+        await super().on_send(room, message)
 
-		elif match_add:
-			term = match_add.group(1)
-			explanation = match_add.group(2).strip()
-			await self.db.add(term, explanation, message.sender.nick)
-			logger.info(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
-			await room.send(f"Added explanation: {term} — {explanation}", message.mid)
+        match = self.RE_WTF_IS.fullmatch(message.content)
+        if match:
+            terms = match.group(1)
+            terms = [term for term in terms.split() if term]
+            if not terms: return
+            lines = await self._find_explanations(terms)
+            await message.reply("\n".join(lines))
 
-		elif match_detail:
-			terms = match_detail.group(1)
-			terms = [term for term in terms.split() if term]
-			if not terms:
-				return
+    async def cmd_wtf(self, room, message, args):
+        match_is = self.RE_IS.fullmatch(args.raw)
+        if match_is:
+            terms = match_is.group(1)
+            terms = [term for term in terms.split() if term]
+            if not terms: return
+            lines = await self._find_explanations(terms)
+            await message.reply("\n".join(lines))
+            return
 
-			lines = await self._find_explanations(terms, detail=True)
-			await room.send("\n".join(lines), message.mid)
+        match_add = self.RE_ADD.fullmatch(args.raw)
+        if match_add:
+            term = match_add.group(1)
+            explanation = match_add.group(2).strip()
+            await self.db.add(term, explanation, message.sender.nick)
+            logger.info((f"{message.sender.atmention} added explanation:"
+                f" {term} - {explanation}"))
+            await message.reply(f"Added explanation: {term} — {explanation}")
+            return
 
-		elif match_delete:
-			aid = match_delete.group(1)
-			await self.db.delete(aid)
-			await room.send(f"Deleted.", message.mid)
-			logger.info(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
+        match_detail = self.RE_DETAIL.fullmatch(args.raw)
+        if match_detail:
+            terms = match_detail.group(1)
+            terms = [term for term in terms.split() if term]
+            if not terms: return
+            lines = await self._find_explanations(terms, detail=True)
+            await message.reply("\n".join(lines))
+            return
 
-		elif match_replace:
-			aid = match_replace.group(1)
-			explanation = match_replace.group(2).strip()
-			term = await self.db.get(aid)
-			print(term)
-			if term is None:
-				await room.send(f"No explanation with id {aid} exists.", message.mid)
-			else:
-				await self.db.delete(aid)
-				logger.info(f"{mention(message.sender.nick)} deleted explanation with id {aid}")
-				await self.db.add(term, explanation, message.sender.nick)
-				logger.info(f"{mention(message.sender.nick)} added explanation: {term} - {explanation}")
-				await room.send(f"Changed explanation: {term} — {explanation}", message.mid)
+        match_delete = self.RE_DELETE.fullmatch(args.raw)
+        if match_delete:
+            aid = match_delete.group(1)
+            await self.db.delete(aid)
+            logger.info((f"{message.sender.atmention} deleted explanation with"
+                " id {aid}"))
+            await message.reply(f"Deleted.")
+            return
 
-		else:
-			text = "Usage:\n" + self.COMMANDS
-			await room.send(text, message.mid)
+        match_replace = self.RE_REPLACE.fullmatch(args.raw)
+        if match_replace:
+            aid = match_replace.group(1)
+            explanation = match_replace.group(2).strip()
+            term = await self.db.get(aid)
+            if term is None:
+                await message.reply(f"No explanation with id {aid} exists.")
+            else:
+                await self.db.delete(aid)
+                logger.info((f"{message.sender.atmention} deleted explanation"
+                        f" with id {aid}"))
+                await self.db.add(term, explanation, message.sender.nick)
+                logger.info((f"{message.sender.atmention} added explanation:"
+                        f" {term} - {explanation}"))
+                await message.reply(f"Changed explanation: {term} — {explanation}")
+            return
 
-	@yaboli.trigger(TRIGGER_WTF_IS, flags=re.IGNORECASE)
-	async def trigger_wtf_is(self, room, message, match):
-		terms = match.group(1)
-		terms = [term for term in terms.split() if term]
-		if not terms:
-			return
+        # else...
+        await message.reply("Incorrect command, see the !help for details.")
 
-		lines = await self._find_explanations(terms)
-		await room.send("\n".join(lines), message.mid)
-
-	@staticmethod
-	def _format_explanations(explanations, detail=False):
-		# Id, Term, Explanation, Author
-		if detail:
-			return [f"{i}: {t} — {e} (by {mention(a, ping=False)})" for i, t, e, a in explanations]
-		else:
-			return [     f"{t} — {e}"                               for _, t, e, _ in explanations]
-
-	async def _find_explanations(self, terms, detail=False):
-		lines = []
-		for term in terms:
-			explanations = await self.db.find_full(term)
-			if explanations:
-				lines.extend(self._format_explanations(explanations, detail=detail))
-			else:
-				lines.append(f"{term!r} not found.")
-		return lines
-
-def main(configfile):
-	logging.basicConfig(level=logging.INFO)
-
-	config = configparser.ConfigParser(allow_no_value=True)
-	config.read(configfile)
-
-	nick = config.get("general", "nick")
-	cookiefile = config.get("general", "cookiefile", fallback=None)
-	wtfdbfile = config.get("general", "wtfdbfile")
-	module = Wtf(wtfdbfile)
-
-	bot = yaboli.ModuleBot(module, nick, cookiefile=cookiefile)
-
-	for room, password in config.items("rooms"):
-		if not password:
-			password = None
-		bot.join_room(room, password=password)
-
-	asyncio.get_event_loop().run_forever()
 
 if __name__ == "__main__":
-	main("wtf.conf")
+    yaboli.enable_logging(level=logging.DEBUG)
+    yaboli.run(Wtf)

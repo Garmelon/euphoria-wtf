@@ -1,0 +1,9 @@
+[general]
+nick = wtf
+cookie_file = cookie_jar
+
+[rooms]
+test
+
+[wtf]
+db = wtf.db

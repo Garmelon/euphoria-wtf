@@ -1,4 +1,14 @@
-**/__pycache__
-*.cookie
+# python stuff
+__pycache__/
+
+# venv stuff
+bin/
+include/
+lib/
+lib64
+pyvenv.cfg
+
+# config files
 *.conf
+cookie_jar
 *.db
