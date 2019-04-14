@@ -1,6 +1,6 @@
 [general]
 nick = wtf
-cookie_file = cookie_jar
+cookie_file = bot.cookie
 
 [rooms]
 test
