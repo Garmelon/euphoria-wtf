@@ -111,6 +111,7 @@ class Wtf(yaboli.Module):
         if match_is:
             terms = match_is.group(1)
             await self.send_explanations(message, terms)
+            return
 
         match_add = self.RE_ADD.fullmatch(args.raw)
         if match_add:
