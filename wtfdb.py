@@ -31,21 +31,23 @@ class WtfDB(yaboli.Database):
             """, (acronym, explanation, author))
 
     @yaboli.operation
-    def find(self, db, acronym):
+    def find(self, db, acronym, limit):
         c = db.execute("""
         SELECT acronym, explanation FROM acronyms
         WHERE NOT deleted AND p_lower(acronym) = ?
         ORDER BY acronym_id ASC
-        """, (acronym.lower(),))
+        LIMIT ?
+        """, (acronym.lower(), limit))
         return c.fetchall()
 
     @yaboli.operation
-    def find_full(self, db, acronym):
+    def find_full(self, db, acronym, limit):
         c = db.execute("""
         SELECT acronym_id, acronym, explanation, author FROM acronyms
         WHERE NOT deleted AND p_lower(acronym) = ?
         ORDER BY acronym_id ASC
-        """, (acronym.lower(),))
+        LIMIT ?
+        """, (acronym.lower(), limit))
         return c.fetchall()
 
     @yaboli.operation
